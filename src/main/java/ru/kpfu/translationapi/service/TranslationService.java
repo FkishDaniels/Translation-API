@@ -9,5 +9,4 @@ import ru.kpfu.translationapi.config.ApiProperties;
 public class TranslationService {
     private final ApiProperties apiProperties;
 
-
 }
