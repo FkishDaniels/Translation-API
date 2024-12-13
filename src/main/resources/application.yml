@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: Translation-API
+  liquibase:
+    enabled: false
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_CONTAINER_NAME:localhost}:5432/${POSTGRES_DB:project}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+api:
+  key: ${YANDEX_KEY}
+  url: https://translate.api.cloud.yandex.net/translate/v2
+  symbols-limit: ${YANDEX_CLOUD_SYMBOLS_LIMIT:1000000}
+
+thread:
+  count: 10
+
+server:
+  port: 8080
+
+
