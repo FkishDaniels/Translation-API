@@ -17,7 +17,7 @@ public class TranslationDAO {
     }
 
     public List<Translation> findAll() {
-        String sql = "SELECT * FROM translation";
+        String sql = "SELECT * FROM translations";
         return jdbcTemplate.query(sql, (rs, rowNum) -> new Translation(
                 rs.getLong("id"),
                 rs.getString("source_language"),
@@ -39,7 +39,7 @@ public class TranslationDAO {
     }
 
     public int save(Translation translation) {
-        String sql = "INSERT INTO translations (source_language, target_language, source_text, translated_text) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO translations (source_language, target_language, source_text, translate_text) VALUES (?, ?, ?, ?)";
         return jdbcTemplate.update(sql,
                 translation.getSourceLanguage(),
                 translation.getTargetLanguage(),
@@ -48,7 +48,7 @@ public class TranslationDAO {
     }
 
     public int update(Translation translation) {
-        String sql = "UPDATE translations SET source_language = ?, target_language = ?, source_text = ?, translated_text = ? WHERE id = ?";
+        String sql = "UPDATE translations SET source_language = ?, target_language = ?, source_text = ?, translate_text = ? WHERE id = ?";
         return jdbcTemplate.update(sql,
                 translation.getSourceLanguage(),
                 translation.getTargetLanguage(),

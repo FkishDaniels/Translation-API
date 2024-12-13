@@ -1,5 +1,6 @@
 package ru.kpfu.translationapi.service;
 
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -27,25 +28,29 @@ public class TranslationService {
     private final YandexRestClient restClient;
 
     @Value("${api.symbols-limit}")
-    private final Integer symbolsLimit;
+    private Integer symbolsLimit;
+    private Set<String> availableLanguages;
 
-    private Set<String> availableLanguages = new HashSet<>();
+    @PostConstruct
+    private void init() throws AvailableLanguageException {
 
-    public Translation translate(String sourceLanguageCode, 
+        this.availableLanguages = this.restClient.getAvailableLanguages()
+                .stream()
+                .map(Language::code)
+                .collect(Collectors.toSet());
+        if(this.availableLanguages.isEmpty())
+            throw  new AvailableLanguageException();
+    }
+
+    public Translation translate(String sourceLanguageCode,
                                  String targetLanguageCode, String sourceText)
             
-            throws InvalidLanguageException, AvailableLanguageException, 
+            throws InvalidLanguageException,
             SymbolsLimitException, ServiceException {
 
-        availableLanguages = this.restClient.getAvailableLanguages().stream()
-                .map(Language::code).collect(Collectors.toSet());
-
-        if (availableLanguages.isEmpty()) {
-            throw new AvailableLanguageException();
-        }
-        if (!this.availableLanguages.contains(sourceLanguageCode)) {
+        if (!availableLanguages.contains(sourceLanguageCode)) {
             throw new InvalidLanguageException(sourceLanguageCode);
-        } else if (!this.availableLanguages.contains(targetLanguageCode)) {
+        } else if (!availableLanguages.contains(targetLanguageCode)) {
             throw new InvalidLanguageException(targetLanguageCode);
         }
 
