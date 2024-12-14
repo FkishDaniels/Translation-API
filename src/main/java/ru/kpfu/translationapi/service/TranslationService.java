@@ -4,7 +4,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import ru.kpfu.translationapi.config.ApiProperties;
 import ru.kpfu.translationapi.domain.repository.TranslationDAO;
 import ru.kpfu.translationapi.exceptions.AvailableLanguageException;
 import ru.kpfu.translationapi.exceptions.InvalidLanguageException;
@@ -14,12 +13,13 @@ import ru.kpfu.translationapi.yandex.YandexRestClient;
 import ru.kpfu.translationapi.yandex.payload.Language;
 import ru.kpfu.translationapi.yandex.payload.Translation;
 
-import java.security.Timestamp;
+
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import java.util.concurrent.Semaphore;
 
 @Service
 @RequiredArgsConstructor
@@ -29,42 +29,49 @@ public class TranslationService {
 
     @Value("${api.symbols-limit}")
     private Integer symbolsLimit;
+
     private Set<String> availableLanguages;
+    private final Semaphore semaphore = new Semaphore(10); // Ограничение на 10 потоков
 
     @PostConstruct
     private void init() throws AvailableLanguageException {
-
         this.availableLanguages = this.restClient.getAvailableLanguages()
                 .stream()
                 .map(Language::code)
                 .collect(Collectors.toSet());
-        if(this.availableLanguages.isEmpty())
-            throw  new AvailableLanguageException();
+        if (this.availableLanguages.isEmpty()) {
+            throw new AvailableLanguageException();
+        }
     }
 
     public Translation translate(String sourceLanguageCode,
                                  String targetLanguageCode, String sourceText)
-            
-            throws InvalidLanguageException,
-            SymbolsLimitException, ServiceException {
+            throws InvalidLanguageException, SymbolsLimitException, ServiceException {
+        try {
+            // Попытка получить разрешение
+            semaphore.acquire();
+            if (!availableLanguages.contains(sourceLanguageCode)) {
+                throw new InvalidLanguageException(sourceLanguageCode);
+            } else if (!availableLanguages.contains(targetLanguageCode)) {
+                throw new InvalidLanguageException(targetLanguageCode);
+            }
 
-        if (!availableLanguages.contains(sourceLanguageCode)) {
-            throw new InvalidLanguageException(sourceLanguageCode);
-        } else if (!availableLanguages.contains(targetLanguageCode)) {
-            throw new InvalidLanguageException(targetLanguageCode);
+            var words = parseWords(sourceText);
+            var results = getTranslations(words, sourceLanguageCode, targetLanguageCode);
+
+            String translatedText = String.join(" ", results);
+            saveTranslation(sourceLanguageCode, targetLanguageCode, sourceText, translatedText);
+
+            return new Translation(translatedText);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException();
+        } finally {
+            semaphore.release();
         }
-
-        var words = parseWords(sourceText);
-        var results = getTranslations(words, sourceLanguageCode, targetLanguageCode);
-
-        String translatedText = String.join(" ", results);
-        saveTranslation(sourceLanguageCode, targetLanguageCode,
-                sourceText, translatedText);
-
-        return new Translation(translatedText);
     }
 
-    private void saveTranslation(String sourceLanguageCode, String targetLanguageCode, String sourceText, String translatedText) {
+    private synchronized void saveTranslation(String sourceLanguageCode, String targetLanguageCode, String sourceText, String translatedText) {
         translationDAO.save(
                 ru.kpfu.translationapi.domain.entity.Translation.builder()
                         .translatedText(translatedText)
@@ -74,7 +81,6 @@ public class TranslationService {
                         .build()
         );
     }
-
 
     private String[] parseWords(String text) throws SymbolsLimitException {
         var words = Arrays.stream(text.split("\\s+"))
@@ -96,9 +102,8 @@ public class TranslationService {
     private String[] getTranslations(String[] words, String sourceLanguageCode, String targetLanguageCode) throws ServiceException {
         var results = new String[words.length];
         int index = 0;
-        for(String word: words) {
-            var result = this.restClient.translateText(sourceLanguageCode, targetLanguageCode, word);
-
+        for (String word : words) {
+            var result = safeTranslateText(sourceLanguageCode, targetLanguageCode, word);
             results[index] = result;
             index++;
         }
@@ -106,5 +111,9 @@ public class TranslationService {
             throw new ServiceException();
         }
         return results;
+    }
+
+    private synchronized String safeTranslateText(String sourceLanguageCode, String targetLanguageCode, String word) {
+        return this.restClient.translateText(sourceLanguageCode, targetLanguageCode, word);
     }
 }
