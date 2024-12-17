@@ -1,11 +1,11 @@
 include:
   - postgres-compose.yml
-
+  - docker-compose.yml
 services:
   app:
     build:
       context: ../
-      dockerfile: ./docker/project.Dockerfile
+      dockerfile: ./docker-elk-main/project.Dockerfile
     container_name: translation_app
     restart: unless-stopped
     env_file:
@@ -17,6 +17,7 @@ services:
       POSTGRES_USER: $POSTGRES_USER
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
       POSTGRES_CONTAINER_NAME: $POSTGRES_CONTAINER_NAME
+      YANDEX_KEY: $YANDEX_KEY
     depends_on:
       liquibase-migrations:
         condition: service_completed_successfully
@@ -26,3 +27,4 @@ services:
       backend:
         aliases:
           - app
+          - logstash
